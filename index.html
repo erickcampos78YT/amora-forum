@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fórum AmoraCoin</title>
+    <title>Fórum Tipo Reddit</title>
     <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js"></script>
-    <script src="https://amoracoin.vercel.app/lib/amoracoin.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        .user-post { border-radius: 10px; }
-        .wallet-card { background: linear-gradient(45deg, #7e3af2, #4c1d95); }
+        .post-card { border-radius: 10px; }
+        .category-card { background: linear-gradient(45deg, #7e3af2, #4c1d95); }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -19,7 +18,7 @@
     <nav class="bg-white shadow-lg">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex justify-between items-center py-4">
-                <h1 class="text-2xl font-bold text-purple-600">Fórum AmoraCoin</h1>
+                <h1 class="text-2xl font-bold text-purple-600">Fórum Tipo Reddit</h1>
                 <div id="userInfo" class="hidden">
                     <img id="userAvatar" class="w-10 h-10 rounded-full inline-block mr-2">
                     <span id="userName" class="font-medium"></span>
@@ -30,41 +29,42 @@
         </div>
     </nav>
 
-    <!-- Carteira AmoraCoin -->
-    <div id="walletSection" class="hidden max-w-6xl mx-auto mt-8 p-6 wallet-card text-white rounded-xl">
-        <h2 class="text-xl font-bold mb-4">Sua Carteira AmoraCoin</h2>
-        <div class="flex justify-between items-center">
-            <div>
-                <p>Saldo: <span id="balance">0</span> AMRC</p>
-                <p>Endereço: <span id="walletAddress"></span></p>
+    <!-- Seção de Categorias -->
+    <div class="max-w-6xl mx-auto mt-8">
+        <h2 class="text-xl font-bold mb-4">Categorias</h2>
+        <div id="categories" class="grid grid-cols-3 gap-4">
+            <!-- Categorias serão carregadas aqui -->
+        </div>
+    </div>
+
+    <!-- Seção de Criar Post -->
+    <div class="max-w-6xl mx-auto mt-8">
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <textarea id="postContent" class="w-full p-4 border rounded-lg" placeholder="Criar nova publicação..."></textarea>
+            <select id="postCategory" class="w-full mt-4 p-2 border rounded-lg">
+                <option value="" disabled selected>Selecione uma categoria</option>
+                <!-- Categorias serão carregadas aqui -->
+            </select>
+            <div class="mt-4 flex justify-between items-center">
+                <button onclick="createPost()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">Publicar</button>
             </div>
-            <button onclick="showTransferModal()" class="bg-white text-purple-600 px-6 py-2 rounded-lg">
-                Transferir AMRC
-            </button>
         </div>
     </div>
 
     <!-- Seção de Posts -->
     <div class="max-w-6xl mx-auto mt-8">
-        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-            <textarea id="postContent" class="w-full p-4 border rounded-lg" placeholder="Criar nova publicação..."></textarea>
-            <div class="mt-4 flex justify-between items-center">
-                <input type="color" id="nameColor" class="h-8">
-                <button onclick="createPost()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">Publicar</button>
-            </div>
-        </div>
         <div id="posts" class="space-y-6"></div>
     </div>
 
-    <!-- Modal de Transferência -->
-    <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <!-- Modal de Comentários -->
+    <div id="commentsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
         <div class="bg-white p-6 rounded-xl w-96">
-            <h3 class="text-xl font-bold mb-4">Transferir AMRC</h3>
-            <input type="text" id="recipientAddress" class="w-full p-2 border rounded mb-4" placeholder="Endereço do destinatário">
-            <input type="number" id="amount" class="w-full p-2 border rounded mb-4" placeholder="Quantidade">
+            <h3 class="text-xl font-bold mb-4">Comentários</h3>
+            <div id="comments" class="space-y-4 mb-4"></div>
+            <textarea id="commentContent" class="w-full p-2 border rounded mb-4" placeholder="Adicionar comentário..."></textarea>
             <div class="flex justify-end space-x-4">
-                <button onclick="closeTransferModal()" class="bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
-                <button onclick="transfer()" class="bg-purple-600 text-white px-4 py-2 rounded">Enviar</button>
+                <button onclick="closeCommentsModal()" class="bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
+                <button onclick="addComment()" class="bg-purple-600 text-white px-4 py-2 rounded">Adicionar</button>
             </div>
         </div>
     </div>
@@ -72,20 +72,18 @@
     <script>
         // Configuração do Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyDgAR561ZWQx0-Q9VDxVi0vHplhrjUSI9E",
-            authDomain: "forum-amcr.firebaseapp.com",
-            databaseURL: "https://forum-amcr-default-rtdb.firebaseio.com",
-            projectId: "forum-amcr",
-            storageBucket: "forum-amcr.firebasestorage.app",
-            messagingSenderId: "558262191370",
-            appId: "1:558262191370:web:2cd5e748309b51700c66f3"
+            apiKey: "API_KEY",
+            authDomain: "PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://PROJECT_ID.firebaseio.com",
+            projectId: "PROJECT_ID",
+            storageBucket: "PROJECT_ID.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
         };
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         let currentUser = null;
-
-        // Inicialização da carteira AmoraCoin
-        const amora = new AmoraCoin();
+        let currentPostId = null;
 
         async function login() {
             try {
@@ -94,61 +92,30 @@
                 currentUser = result.user;
                 document.getElementById('loginBtn').classList.add('hidden');
                 document.getElementById('userInfo').classList.remove('hidden');
-                document.getElementById('walletSection').classList.remove('hidden');
                 document.getElementById('userAvatar').src = currentUser.photoURL;
                 document.getElementById('userName').textContent = currentUser.displayName;
-                
-                // Inicializar carteira
-                await amora.connect();
-                document.getElementById('walletAddress').textContent = amora.address;
-                updateBalance();
             } catch (error) {
                 console.error("Erro no login:", error);
             }
         }
 
-        async function updateBalance() {
-            const balance = await amora.getBalance();
-            document.getElementById('balance').textContent = balance;
-        }
-
         async function createPost() {
             if (!currentUser) return;
             const content = document.getElementById('postContent').value;
-            const nameColor = document.getElementById('nameColor').value;
-            
+            const category = document.getElementById('postCategory').value;
+
             await db.collection('posts').add({
                 content,
-                nameColor,
+                category,
                 authorId: currentUser.uid,
                 authorName: currentUser.displayName,
                 authorPhoto: currentUser.photoURL,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                upvotes: 0
             });
 
             document.getElementById('postContent').value = '';
             loadPosts();
-        }
-
-        function showTransferModal() {
-            document.getElementById('transferModal').classList.remove('hidden');
-        }
-
-        function closeTransferModal() {
-            document.getElementById('transferModal').classList.add('hidden');
-        }
-
-        async function transfer() {
-            const recipient = document.getElementById('recipientAddress').value;
-            const amount = document.getElementById('amount').value;
-            
-            try {
-                await amora.transfer(recipient, amount);
-                updateBalance();
-                closeTransferModal();
-            } catch (error) {
-                console.error("Erro na transferência:", error);
-            }
         }
 
         function loadPosts() {
@@ -159,14 +126,92 @@
                 snapshot.forEach(doc => {
                     const post = doc.data();
                     postsDiv.innerHTML += `
-                        <div class="bg-white p-6 user-post shadow-md">
+                        <div class="bg-white p-6 post-card shadow-md">
                             <div class="flex items-center mb-4">
                                 <img src="${post.authorPhoto}" class="w-10 h-10 rounded-full mr-4">
-                                <span style="color: ${post.nameColor}">${post.authorName}</span>
+                                <span>${post.authorName}</span>
+                                <span class="ml-auto text-gray-600">${post.category}</span>
                             </div>
                             <p class="text-gray-800">${post.content}</p>
+                            <div class="mt-4 flex justify-between items-center">
+                                <button onclick="upvotePost('${doc.id}')" class="bg-green-500 text-white px-4 py-2 rounded">Upvote (${post.upvotes})</button>
+                                <button onclick="showCommentsModal('${doc.id}')" class="bg-blue-500 text-white px-4 py-2 rounded">Comentários</button>
+                            </div>
                         </div>
                     `;
+                });
+            });
+        }
+
+        async function upvotePost(postId) {
+            const postRef = db.collection('posts').doc(postId);
+            await postRef.update({
+                upvotes: firebase.firestore.FieldValue.increment(1)
+            });
+        }
+
+        function showCommentsModal(postId) {
+            currentPostId = postId;
+            document.getElementById('commentsModal').classList.remove('hidden');
+            loadComments(postId);
+        }
+
+        function closeCommentsModal() {
+            document.getElementById('commentsModal').classList.add('hidden');
+        }
+
+        async function addComment() {
+            if (!currentUser || !currentPostId) return;
+            const content = document.getElementById('commentContent').value;
+
+            await db.collection('posts').doc(currentPostId).collection('comments').add({
+                content,
+                authorId: currentUser.uid,
+                authorName: currentUser.displayName,
+                authorPhoto: currentUser.photoURL,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            document.getElementById('commentContent').value = '';
+            loadComments(currentPostId);
+        }
+
+        function loadComments(postId) {
+            db.collection('posts').doc(postId).collection('comments').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+                const commentsDiv = document.getElementById('comments');
+                commentsDiv.innerHTML = '';
+                
+                snapshot.forEach(doc => {
+                    const comment = doc.data();
+                    commentsDiv.innerHTML += `
+                        <div class="bg-gray-100 p-4 rounded-lg">
+                            <div class="flex items-center mb-2">
+                                <img src="${comment.authorPhoto}" class="w-8 h-8 rounded-full mr-2">
+                                <span>${comment.authorName}</span>
+                            </div>
+                            <p class="text-gray-800">${comment.content}</p>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        function loadCategories() {
+            db.collection('categories').onSnapshot(snapshot => {
+                const categoriesDiv = document.getElementById('categories');
+                const postCategorySelect = document.getElementById('postCategory');
+                categoriesDiv.innerHTML = '';
+                postCategorySelect.innerHTML = '<option value="" disabled selected>Selecione uma categoria</option>';
+                
+                snapshot.forEach(doc => {
+                    const category = doc.data();
+                    categoriesDiv.innerHTML += `
+                        <div class="category-card p-4 text-white rounded-lg">
+                            <h3 class="text-lg font-bold">${category.name}</h3>
+                            <p>${category.description}</p>
+                        </div>
+                    `;
+                    postCategorySelect.innerHTML += `<option value="${category.name}">${category.name}</option>`;
                 });
             });
         }
@@ -176,11 +221,11 @@
             currentUser = null;
             document.getElementById('loginBtn').classList.remove('hidden');
             document.getElementById('userInfo').classList.add('hidden');
-            document.getElementById('walletSection').classList.add('hidden');
         }
 
-        // Carregar posts iniciais
+        // Carregar posts e categorias iniciais
         loadPosts();
+        loadCategories();
     </script>
 </body>
 </html>
