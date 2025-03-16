@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fórum AmoraCoin</title>
+    <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js"></script>
+    <script src="https://amoracoin.vercel.app/lib/amoracoin.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .user-post { border-radius: 10px; }
+        .wallet-card { background: linear-gradient(45deg, #7e3af2, #4c1d95); }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <h1 class="text-2xl font-bold text-purple-600">Fórum AmoraCoin</h1>
+                <div id="userInfo" class="hidden">
+                    <img id="userAvatar" class="w-10 h-10 rounded-full inline-block mr-2">
+                    <span id="userName" class="font-medium"></span>
+                    <button onclick="logout()" class="ml-4 bg-red-500 text-white px-4 py-2 rounded-lg">Sair</button>
+                </div>
+                <button id="loginBtn" onclick="login()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">Entrar</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Carteira AmoraCoin -->
+    <div id="walletSection" class="hidden max-w-6xl mx-auto mt-8 p-6 wallet-card text-white rounded-xl">
+        <h2 class="text-xl font-bold mb-4">Sua Carteira AmoraCoin</h2>
+        <div class="flex justify-between items-center">
+            <div>
+                <p>Saldo: <span id="balance">0</span> AMRC</p>
+                <p>Endereço: <span id="walletAddress"></span></p>
+            </div>
+            <button onclick="showTransferModal()" class="bg-white text-purple-600 px-6 py-2 rounded-lg">
+                Transferir AMRC
+            </button>
+        </div>
+    </div>
+
+    <!-- Seção de Posts -->
+    <div class="max-w-6xl mx-auto mt-8">
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <textarea id="postContent" class="w-full p-4 border rounded-lg" placeholder="Criar nova publicação..."></textarea>
+            <div class="mt-4 flex justify-between items-center">
+                <input type="color" id="nameColor" class="h-8">
+                <button onclick="createPost()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">Publicar</button>
+            </div>
+        </div>
+        <div id="posts" class="space-y-6"></div>
+    </div>
+
+    <!-- Modal de Transferência -->
+    <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-xl w-96">
+            <h3 class="text-xl font-bold mb-4">Transferir AMRC</h3>
+            <input type="text" id="recipientAddress" class="w-full p-2 border rounded mb-4" placeholder="Endereço do destinatário">
+            <input type="number" id="amount" class="w-full p-2 border rounded mb-4" placeholder="Quantidade">
+            <div class="flex justify-end space-x-4">
+                <button onclick="closeTransferModal()" class="bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
+                <button onclick="transfer()" class="bg-purple-600 text-white px-4 py-2 rounded">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDgAR561ZWQx0-Q9VDxVi0vHplhrjUSI9E",
+            authDomain: "forum-amcr.firebaseapp.com",
+            databaseURL: "https://forum-amcr-default-rtdb.firebaseio.com",
+            projectId: "forum-amcr",
+            storageBucket: "forum-amcr.firebasestorage.app",
+            messagingSenderId: "558262191370",
+            appId: "1:558262191370:web:2cd5e748309b51700c66f3"
+        };
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        let currentUser = null;
+
+        // Inicialização da carteira AmoraCoin
+        const amora = new AmoraCoin();
+
+        async function login() {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await firebase.auth().signInWithPopup(provider);
+                currentUser = result.user;
+                document.getElementById('loginBtn').classList.add('hidden');
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('walletSection').classList.remove('hidden');
+                document.getElementById('userAvatar').src = currentUser.photoURL;
+                document.getElementById('userName').textContent = currentUser.displayName;
+                
+                // Inicializar carteira
+                await amora.connect();
+                document.getElementById('walletAddress').textContent = amora.address;
+                updateBalance();
+            } catch (error) {
+                console.error("Erro no login:", error);
+            }
+        }
+
+        async function updateBalance() {
+            const balance = await amora.getBalance();
+            document.getElementById('balance').textContent = balance;
+        }
+
+        async function createPost() {
+            if (!currentUser) return;
+            const content = document.getElementById('postContent').value;
+            const nameColor = document.getElementById('nameColor').value;
+            
+            await db.collection('posts').add({
+                content,
+                nameColor,
+                authorId: currentUser.uid,
+                authorName: currentUser.displayName,
+                authorPhoto: currentUser.photoURL,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            document.getElementById('postContent').value = '';
+            loadPosts();
+        }
+
+        function showTransferModal() {
+            document.getElementById('transferModal').classList.remove('hidden');
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transferModal').classList.add('hidden');
+        }
+
+        async function transfer() {
+            const recipient = document.getElementById('recipientAddress').value;
+            const amount = document.getElementById('amount').value;
+            
+            try {
+                await amora.transfer(recipient, amount);
+                updateBalance();
+                closeTransferModal();
+            } catch (error) {
+                console.error("Erro na transferência:", error);
+            }
+        }
+
+        function loadPosts() {
+            db.collection('posts').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+                const postsDiv = document.getElementById('posts');
+                postsDiv.innerHTML = '';
+                
+                snapshot.forEach(doc => {
+                    const post = doc.data();
+                    postsDiv.innerHTML += `
+                        <div class="bg-white p-6 user-post shadow-md">
+                            <div class="flex items-center mb-4">
+                                <img src="${post.authorPhoto}" class="w-10 h-10 rounded-full mr-4">
+                                <span style="color: ${post.nameColor}">${post.authorName}</span>
+                            </div>
+                            <p class="text-gray-800">${post.content}</p>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        function logout() {
+            firebase.auth().signOut();
+            currentUser = null;
+            document.getElementById('loginBtn').classList.remove('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+            document.getElementById('walletSection').classList.add('hidden');
+        }
+
+        // Carregar posts iniciais
+        loadPosts();
+    </script>
+</body>
+</html>
